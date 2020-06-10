@@ -1,15 +1,17 @@
 package Client;
 
-import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.Socket;
+import java.net.SocketException;
+import java.util.Enumeration;
 import java.util.Random;
-import java.util.regex.Pattern;
 
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
@@ -35,29 +37,31 @@ public class LoginView extends JFrame {
 	private JButton loginBtn;
 	private JLabel statusLb;
 
+    private ClientController controller;
 	public static int serverPort = 3000;
 	private String username = "", IPaddress = "", password = "";
 
 	/**
 	 * Launch the application.
 	 */
-	public static void main(String[] args) {
-		EventQueue.invokeLater(new Runnable() {
-			public void run() {
-				try {
-					LoginView frame = new LoginView();
-					frame.setVisible(true);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}
-		});
-	}
+//	public static void main(String[] args) {
+//		EventQueue.invokeLater(new Runnable() {
+//			public void run() {
+//				try {
+//					LoginView frame = new LoginView();
+//					frame.setVisible(true);
+//				} catch (Exception e) {
+//					e.printStackTrace();
+//				}
+//			}
+//		});
+//	}
 
 	/**
 	 * Create the frame.
 	 */
-	public LoginView() {
+	public LoginView(ClientController controller) {
+		this.controller = controller;
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setBounds(100, 100, 385, 371);
 		panelMain = new JPanel();
@@ -230,13 +234,14 @@ public class LoginView extends JFrame {
 				// create random port for client
 				Random rd = new Random();
 				int portPeer = 10000 + rd.nextInt() % 1000;
+				
 				// get IP Address and port of server
 				InetAddress serverIP = InetAddress.getByName(IPaddress);
 				serverPort = Integer.parseInt(serverPortField.getText());
 				Socket socketClient = new Socket(serverIP, serverPort);
 
 				// Send message (username, password, port) login to server
-				String msg = "LOG " + username + " " + password + " " + portPeer;
+				String msg = "LOG " + username + " " + password + " " + portPeer + " " + getIPAddress().getHostAddress();
 
 				// create object output stream to send message to server
 				ObjectOutputStream StreamOut = new ObjectOutputStream(socketClient.getOutputStream());
@@ -248,17 +253,16 @@ public class LoginView extends JFrame {
 
 				// get message
 				msg = (String) StreamIn.readObject();
-				socketClient.close();
+//				socketClient.close();
 
 				// if the username input meet the deny tag, then let user know
 				if (msg.equals("NO")) {
 					statusLb.setText("Status: Wrong Username or Password");
+					socketClient.close();
 					return;
 				}
 				System.out.println("Success");
-				String[] msgLog = msg.split(" ", 0);
-				System.out.println(msg);
-				new ChatView(IPaddress, serverPort, portPeer, username, msgLog);
+				controller.onLoginSuccess(serverIP.toString(), serverPort, portPeer, username, msg);
 				dispose();
 
 			} catch (Exception e) {
@@ -286,7 +290,7 @@ public class LoginView extends JFrame {
 				Socket socketClient = new Socket(serverIP, serverPort);
 
 				// Send message (username, password, port) login to server
-				String msg = "REG " + username + " " + password + " " + portPeer;
+				String msg = "REG " + username + " " + password + " " + portPeer + " " + getIPAddress().getHostAddress();
 
 				// create object output stream to send message to server
 				ObjectOutputStream StreamOut = new ObjectOutputStream(socketClient.getOutputStream());
@@ -298,16 +302,16 @@ public class LoginView extends JFrame {
 
 				// get message
 				msg = (String) StreamIn.readObject();
-				socketClient.close();
+//				socketClient.close();
 
 				// if the username input meet the deny tag, then let user know
 				if (msg.equals("NO")) {
 					statusLb.setText("Status: Username existed");
+					socketClient.close();
 					return;
 				}
 				System.out.println("Success");
-				String[] msgLog = msg.split(" ", 0);
-				new ChatView(IPaddress, serverPort, portPeer, username, msgLog);
+				controller.onLoginSuccess(serverIP.toString(), serverPort, portPeer, username, msg);
 				dispose();
 
 			} catch (Exception e) {
@@ -317,5 +321,22 @@ public class LoginView extends JFrame {
 		} else {
 			statusLb.setText("Status: Server IP empty or Username contains special character");
 		}
+	}
+	
+	private static InetAddress getIPAddress() throws SocketException {
+		Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+		while (ifaces.hasMoreElements()) {
+			NetworkInterface iface = ifaces.nextElement();
+			Enumeration<InetAddress> addresses = iface.getInetAddresses();
+
+			while (addresses.hasMoreElements()) {
+				InetAddress addr = addresses.nextElement();
+				if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+					return addr;
+				}
+			}
+		}
+
+		return null;
 	}
 }
